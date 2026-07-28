@@ -1,0 +1,15 @@
+.git
+.github
+.gitignore
+.dockerignore
+README.md
+LICENSE
+Dockerfile.insecure
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.vscode/
+.idea/
+*.sarif

@@ -1,0 +1,55 @@
+# =============================================================================
+# Dockerfile.insecure
+#
+# ⚠️  INTENTIONALLY VULNERABLE — DO NOT USE IN PRODUCTION ⚠️
+#
+# This Dockerfile exists purely as a "before" example for the
+# container-security-scan demo. Every instruction below is annotated with the
+# anti-pattern it demonstrates. Running Trivy/Dockle against the image built
+# from this file will surface HIGH/CRITICAL findings on purpose.
+# =============================================================================
+
+# ANTI-PATTERN 1: Floating "latest" tag.
+# "latest" is a moving target - it is never reproducible, it silently pulls in
+# whatever CVEs exist in today's build, and it also drags in a large,
+# full-fat Debian base instead of a minimal one.
+FROM python:latest
+
+# ANTI-PATTERN 2: Fake "secret" baked into an image layer via ENV.
+# Anything set with ENV/ARG is stored in plain text in the image history and
+# can be extracted with `docker history` or `docker inspect` by anyone who
+# pulls the image. Real secrets must NEVER be baked into an image.
+ENV API_KEY="sk-demo-1234567890abcdef"
+
+# ANTI-PATTERN 3: No WORKDIR isolation - building straight into "/" mixes app
+# code with system files and makes cleanup / COPY scoping unpredictable.
+WORKDIR /
+
+# ANTI-PATTERN 4: `apt-get install` without `--no-install-recommends` and
+# without cleaning up apt cache/lists afterwards. This bloats the image and
+# ships package-manager metadata (and sometimes compilers/dev headers) that
+# increase the attack surface for no runtime benefit.
+RUN apt-get update && apt-get install -y curl vim gcc
+
+# ANTI-PATTERN 5: `COPY . .` copies the ENTIRE build context (including .git,
+# local .env files, test fixtures, CI configs, etc.) into the image instead of
+# only the files the app actually needs at runtime.
+COPY . .
+
+# ANTI-PATTERN 6: Installing dependencies as root, with no version pinning
+# enforced and no `--no-cache-dir`, bloating layers and trusting whatever is
+# latest on PyPI at build time.
+RUN pip install flask
+
+# ANTI-PATTERN 7: No non-root USER instruction. The container runs as root
+# (UID 0) by default, so a container escape or RCE in the app runs as root
+# both inside the container and, on misconfigured hosts, potentially on it.
+# (Deliberately no `USER` line here.)
+
+# ANTI-PATTERN 8: No HEALTHCHECK. The orchestrator has no way to know the
+# process is alive/serving traffic vs. hung.
+
+# ANTI-PATTERN 9: No EXPOSE documentation of the intended port, and the app
+# is started with the Flask dev server (never do this in real deployments -
+# it is single-threaded, unsafe for concurrent traffic, and not hardened).
+CMD ["python", "app/app.py"]

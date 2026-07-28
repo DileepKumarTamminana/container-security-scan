@@ -1,0 +1,81 @@
+name: Container Security Scan
+
+# Runs on every push/PR touching main, plus a weekly cron so the base image
+# and its dependencies get re-scanned for newly disclosed CVEs even when no
+# code has changed.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * 1" # every Monday 06:00 UTC
+  workflow_dispatch: {}
+
+env:
+  IMAGE_NAME: container-security-scan
+  IMAGE_TAG: ci-${{ github.run_id }}
+
+jobs:
+  build-and-scan:
+    name: Build hardened image, scan with Trivy + Dockle
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Build the HARDENED Dockerfile (./Dockerfile) - this is the image that
+      # is meant to pass the gate. Dockerfile.insecure is kept only as a
+      # documented "before" example and is intentionally not built in CI.
+      - name: Build hardened image
+        run: docker build -f Dockerfile -t ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} .
+
+      # -----------------------------------------------------------------
+      # Trivy: image vulnerability scanning (OS packages + language deps).
+      # Fails the job (exit-code: 1) if any HIGH or CRITICAL severity
+      # vulnerability is found, so insecure images can't merge silently.
+      # -----------------------------------------------------------------
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.29.0
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      # Also emit a SARIF report and upload it to the GitHub Security tab so
+      # findings show up as code scanning alerts, even on runs that pass.
+      - name: Run Trivy (SARIF for GitHub Security tab)
+        if: always()
+        uses: aquasecurity/trivy-action@0.29.0
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          format: sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
+          output: trivy-results.sarif
+
+      - name: Upload Trivy SARIF results
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+
+      # -----------------------------------------------------------------
+      # Dockle: Dockerfile/image best-practice and CIS benchmark linting
+      # (non-root user, HEALTHCHECK, no secrets in layers, etc.). FATAL
+      # findings fail the job.
+      # -----------------------------------------------------------------
+      - name: Run Dockle
+        uses: goodwithtech/dockle-action@main
+        with:
+          image: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          format: list
+          exit-code: "1"
+          exit-level: fatal
