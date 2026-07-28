@@ -9,7 +9,7 @@
 # HARDENING 1: Pin to a specific, minimal base image tag (not "latest").
 # "slim" drastically reduces the package surface vs. the full Debian image,
 # and pinning the exact version makes builds reproducible and scannable.
-FROM python:3.12-slim AS base
+FROM python:3.14-slim AS base
 
 # HARDENING 2: No secrets baked into the image. Configuration/secrets should
 # be injected at runtime (env vars from a secrets manager, mounted files,
