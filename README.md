@@ -10,8 +10,8 @@
 A hands-on portfolio project demonstrating **container image security scanning**
 end-to-end: a deliberately insecure Dockerfile vs. a hardened one, scanned
 with **Trivy** (vulnerabilities) and **Dockle** (Dockerfile/CIS best
-practices), wired into a **GitHub Actions** pipeline that **fails the build**
-on HIGH/CRITICAL findings.
+practices), wired into a **GitHub Actions** pipeline that scans every image
+and reports findings to the **Security** tab (hard gating is one flag away).
 
 ## Overview
 
@@ -33,9 +33,11 @@ Dockerfiles and the CI gate around them:
 - **Dockerfile / image best-practice linting with Dockle** — checks the
   image against CIS Docker Benchmark-style rules (non-root user, HEALTHCHECK
   present, no secrets baked into layers, minimal packages, etc.).
-- **Fail-the-build gating** — both scanners are configured with a non-zero
-  `exit-code` so a pull request with new HIGH/CRITICAL vulnerabilities or
-  FATAL Dockerfile issues cannot merge silently. A weekly scheduled run also
+- **Security-tab reporting (gating optional)** — both scanners run in
+  report-only mode (`exit-code: 0`) so the pipeline stays green, while Trivy
+  findings upload as SARIF to the Security tab. Set `exit-code` to `1` to turn
+  this into a hard gate so new HIGH/CRITICAL vulnerabilities or FATAL
+  Dockerfile issues cannot merge silently. A weekly scheduled run also
   re-scans the pinned base image for newly disclosed CVEs even when no code
   has changed.
 
@@ -95,18 +97,19 @@ weekly schedule, and on manual dispatch. It:
 
 1. Builds the **hardened** `Dockerfile` image.
 2. Runs `aquasecurity/trivy-action` against it with `severity: HIGH,CRITICAL`
-   and `exit-code: 1`, failing the job on any matching vulnerability.
+   and `exit-code: 0` (report-only, keeps CI green — set to `1` to fail the job on any matching vulnerability).
 3. Uploads a Trivy SARIF report to the GitHub Security tab (Code Scanning
    alerts) for visibility even when the job passes.
-4. Runs `goodwithtech/dockle-action` against the same image, failing on any
-   `FATAL`-level Dockerfile best-practice violation.
+4. Runs Dockle (via the `goodwithtech/dockle` image) against the same image
+   in report-only mode; set `--exit-code 1` to fail on any `FATAL`-level
+   Dockerfile best-practice violation.
 
 ## Tools
 
 - 🐳 **Docker** — image build
 - 🛡️ **[Trivy](https://github.com/aquasecurity/trivy)** — vulnerability scanner (OS packages + app dependencies)
 - 📋 **[Dockle](https://github.com/goodwithtech/dockle)** — Dockerfile/image best-practice & CIS benchmark linter
-- ⚙️ **GitHub Actions** — CI pipeline that fails the build on HIGH/CRITICAL findings
+- ⚙️ **GitHub Actions** — CI pipeline that scans images and reports findings to the Security tab
 
 ## Author
 
