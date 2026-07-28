@@ -47,8 +47,7 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2).status == 200 else 1)"
 
-# HARDENING 10: Run with a production-grade WSGI server (gunicorn) rather
-# than the Flask dev server, bound only to what's needed, as the non-root
-# user set above.
-RUN pip install --no-cache-dir --no-compile gunicorn==22.0.0
+# HARDENING 10: Run with a production-grade WSGI server (gunicorn) rather than
+# the Flask dev server. gunicorn is installed via requirements.txt as root
+# (before the USER switch above), so no privileged install happens post-drop.
 CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "app:app"]
